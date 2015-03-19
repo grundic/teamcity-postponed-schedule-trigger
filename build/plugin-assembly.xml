@@ -15,7 +15,7 @@
     <moduleSet>
        <useAllReactorProjects>true</useAllReactorProjects>
        <includes>
-           <include>ru.mail.teamcity:teamcity-extended-schedule-trigger-server</include>
+           <include>ru.mail.teamcity:server</include>
        </includes> 
        <binaries>
            <outputDirectory>server</outputDirectory>

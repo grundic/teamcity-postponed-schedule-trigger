@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <artifactId>teamcity-extended-schedule-trigger</artifactId>
+    <artifactId>teamcity-postponed-schedule-trigger</artifactId>
     <groupId>ru.mail.teamcity</groupId>
     <version>1.0</version>
   </parent>
@@ -11,12 +11,13 @@
   <properties>
       <maven.build.timestamp.format>yyyyddMMHHmmss</maven.build.timestamp.format>
       <pluginLocation>/opt/jetbrains/TeamCity/PluginDev.Data.8.1.3/</pluginLocation>
+      <!--<pluginLocation>/opt/jetbrains/TeamCity/PluginDev.Data.9.0/</pluginLocation>-->
       <plugin.final.name>${project.parent.artifactId}-${project.version}</plugin.final.name>
   </properties>
   <dependencies>
       <dependency>
            <groupId>ru.mail.teamcity</groupId>
-           <artifactId>teamcity-extended-schedule-trigger-server</artifactId>
+           <artifactId>server</artifactId>
            <version>1.0</version>
       </dependency>
   </dependencies>
@@ -26,7 +27,7 @@
             <groupId>com.google.code.maven-replacer-plugin</groupId>
             <artifactId>replacer</artifactId>
             <version>1.5.2</version>
-            <executions>                
+            <executions>
                 <execution>
                     <phase>process-sources</phase>
                     <goals>
@@ -42,7 +43,7 @@
                         <token>@Version@</token>
                         <value>snapshot-${maven.build.timestamp}</value>
                     </replacement>
-                </replacements>                        
+                </replacements>
             </configuration>
         </plugin>
         <plugin>

@@ -1,4 +1,4 @@
-package ru.mail.teamcity.extended.schedule.trigger;
+package ru.mail.teamcity.postponed.schedule.trigger;
 
 import jetbrains.buildServer.BuildAgent;
 import jetbrains.buildServer.buildTriggers.*;
@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * Author: g.chernyshev
  * Date: 13.03.15
  */
-public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
+public class PostponedSchedulerBuildTriggerService extends BuildTriggerService {
 
     static final String PROP_TRIGGER_BUILD_WITH_PENDING_CHANGES_ONLY_PARAM = "triggerBuildWithPendingChangesOnly";
     static final String PROP_ENFORCE_CLEAN_CHECKOUT_PARAM = "enforceCleanCheckout";
@@ -38,7 +38,7 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     static final String PROP_WAIT_TIMEOUT = "waitTimeout";
 
     @NotNull
-    private static final Logger LOG = Logger.getLogger(ExtendedSchedulerBuildTriggerService.class);
+    private static final Logger LOG = Logger.getLogger(PostponedSchedulerBuildTriggerService.class);
 
 
     @NotNull private final PluginDescriptor pluginDescriptor;
@@ -53,7 +53,7 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
 
     private SchedulerBuildTriggerService delegate;
 
-    public ExtendedSchedulerBuildTriggerService(
+    public PostponedSchedulerBuildTriggerService(
             @NotNull PluginDescriptor pluginDescriptor,
             @NotNull BatchTrigger batchTrigger,
             @NotNull EventDispatcher<BuildServerListener> eventDispatcher,
@@ -83,13 +83,13 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     @NotNull
     @Override
     public String getName() {
-        return "extendedSchedulingTrigger";
+        return "postponedSchedulingTrigger";
     }
 
     @NotNull
     @Override
     public String getDisplayName() {
-        return "Extended Schedule Trigger";
+        return "Postponed Schedule Trigger";
     }
 
     @NotNull
@@ -123,7 +123,7 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     @Nullable
     @Override
     public String getEditParametersUrl() {
-        return pluginDescriptor.getPluginResourcesPath("editExtendedSchedulerBuildTrigger.jsp");
+        return pluginDescriptor.getPluginResourcesPath("editPostponedSchedulerBuildTrigger.jsp");
     }
 
     @Nullable

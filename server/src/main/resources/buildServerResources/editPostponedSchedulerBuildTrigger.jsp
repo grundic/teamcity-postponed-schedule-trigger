@@ -4,7 +4,7 @@
 
 
 <jsp:include page="/admin/triggers/editSchedulingTrigger.jsp"/>
-<l:settingsGroup title="Extended parameters"/>
+<l:settingsGroup title="Postponed parameters"/>
 <tr>
     <td><label for="buildTypeIdList">Build ids to wait for:</label></td>
     <td>
