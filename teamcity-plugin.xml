@@ -2,15 +2,14 @@
 <teamcity-plugin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:shemas-jetbrains-com:teamcity-plugin-v1-xml">
   <info>
     <name>teamcity-postponed-schedule-trigger</name>
-    <display-name>teamcity-postponed-schedule-trigger</display-name>
+    <display-name>Teamcity postponed schedule trigger</display-name>
     <version>@Version@</version>
-    <description>Plugin description</description>
-    <download-url>Plugin download URL</download-url>
-    <email>Plugin author e-mail</email>
+    <description>Scheduled build trigger with possibility to postpone triggering if any builds are still in queue/running</description>
+    <download-url>https://github.com/grundic/teamcity-postponed-schedule-trigger</download-url>
+    <email>systray@yandex.ru</email>
     <vendor>
-      <name>Plugin vendor name</name>
-      <url>Plugin vendor URL</url>
-      <logo>Plugin vendor logo URL</logo>
+      <name>Grigory Chernyshev [mail.ru]</name>
+      <url>http://mail.ru</url>
     </vendor>
   </info>
   <deployment use-separate-classloader="true" />
