@@ -9,7 +9,7 @@ The plugin adds possibility to postpone build triggering if some of other builds
 
 Installation
 =============
-Download jar and copy it to your server's data directory plugins folder.
+Download [zip archive](https://github.com/grundic/teamcity-postponed-schedule-trigger/releases/latest) and copy it to your server's data directory plugins folder.
 For more information, take a look at [official documentation](https://confluence.jetbrains.com/display/TCD8/Installing+Additional+Plugins)
 
 Configuration
