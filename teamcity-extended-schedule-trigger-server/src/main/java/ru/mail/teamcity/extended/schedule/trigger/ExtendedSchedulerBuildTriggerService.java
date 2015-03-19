@@ -23,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Author: g.chernyshev
@@ -33,17 +34,20 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     static final String PROP_TRIGGER_BUILD_WITH_PENDING_CHANGES_ONLY_PARAM = "triggerBuildWithPendingChangesOnly";
     static final String PROP_ENFORCE_CLEAN_CHECKOUT_PARAM = "enforceCleanCheckout";
     static final String PROP_TRIGGER_BUILD_ON_ALL_COMPATIBLE_AGENTS = "triggerBuildOnAllCompatibleAgents";
+    static final String PROP_BUILD_TYPE_ID_LIST = "buildTypeIdList";
+    static final String PROP_WAIT_TIMEOUT = "waitTimeout";
 
     @NotNull
     private static final Logger LOG = Logger.getLogger(ExtendedSchedulerBuildTriggerService.class);
 
 
-    private final PluginDescriptor pluginDescriptor;
-    private final BatchTrigger batchTrigger;
-    private final BuildCustomizerFactory buildCustomizerFactory;
-    private final TimeService myTimeService;
-    private final BranchSpecs branchSpecs;
-    private final VersionedSettingsManager versionedSettingsManager;
+    @NotNull private final PluginDescriptor pluginDescriptor;
+    @NotNull private final BatchTrigger batchTrigger;
+    @NotNull private final BuildCustomizerFactory buildCustomizerFactory;
+    @NotNull private final TimeService myTimeService;
+    @NotNull private final BranchSpecs branchSpecs;
+    @NotNull private final VersionedSettingsManager versionedSettingsManager;
+    @NotNull private final ProjectManager projectManager;
     private long myServerStartupTime = 0;
 
 
@@ -55,13 +59,15 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
             @NotNull EventDispatcher<BuildServerListener> eventDispatcher,
             @NotNull BranchSpecs branchSpecs,
             @NotNull BuildCustomizerFactory buildCustomizerFactory,
-            @NotNull VersionedSettingsManager versionedSettingsManager
-    ) {
+            @NotNull VersionedSettingsManager versionedSettingsManager,
+            @NotNull ProjectManager projectManager) {
         this.pluginDescriptor = pluginDescriptor;
         this.batchTrigger = batchTrigger;
         this.buildCustomizerFactory = buildCustomizerFactory;
         this.branchSpecs = branchSpecs;
         this.versionedSettingsManager = versionedSettingsManager;
+        this.projectManager = projectManager;
+
 
         myTimeService = SystemTimeService.getInstance();
         eventDispatcher.addListener(new BuildServerAdapter() {
@@ -89,7 +95,14 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     @NotNull
     @Override
     public String describeTrigger(@NotNull BuildTriggerDescriptor buildTriggerDescriptor) {
-        return delegate.describeTrigger(buildTriggerDescriptor);
+        return String.format(
+                "%s%n" +
+                "Build ids to wait for: %s%n" +
+                "Timeout: %s",
+                delegate.describeTrigger(buildTriggerDescriptor),
+                buildTriggerDescriptor.getProperties().get(PROP_BUILD_TYPE_ID_LIST),
+                buildTriggerDescriptor.getProperties().get(PROP_WAIT_TIMEOUT)
+        );
     }
 
     private boolean isTriggerIfPendingChanges(Map<String, String> props) {
@@ -125,11 +138,37 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
     public PropertiesProcessor getTriggerPropertiesProcessor() {
         return new PropertiesProcessor() {
             public Collection<InvalidProperty> process(Map<String, String> properties) {
-                //TODO process
                 Collection<InvalidProperty> invalid = delegate.getTriggerPropertiesProcessor().process(properties);
+
+                String buildIdProp = properties.get(PROP_BUILD_TYPE_ID_LIST);
+                if (null != buildIdProp) {
+                    String[] buildIdList = splitBuildIds(buildIdProp);
+                    for (String buildId: buildIdList){
+                        if (!buildId.isEmpty()) {
+                            SBuildType buildType = projectManager.findBuildTypeByExternalId(buildId);
+                            if (null == buildType) {
+                                invalid.add(new InvalidProperty(PROP_BUILD_TYPE_ID_LIST, String.format("Can't find build with <%s> id!", buildId)));
+                            }
+                        }
+                    }
+                }
+
+                String waitTimeoutProp = properties.get(PROP_WAIT_TIMEOUT);
+                if (null != waitTimeoutProp) {
+                    try {
+                        Long.parseLong(waitTimeoutProp);
+                    } catch (NumberFormatException exception) {
+                        invalid.add(new InvalidProperty(PROP_WAIT_TIMEOUT, String.format("Can't parse timeout value <%s>!", waitTimeoutProp)));
+                    }
+                }
+
                 return invalid;
             }
         };
+    }
+
+    private String[] splitBuildIds(String value){
+        return value.split(";");
     }
 
     @NotNull
@@ -143,18 +182,70 @@ public class ExtendedSchedulerBuildTriggerService extends BuildTriggerService {
                 BuildTriggerDescriptor triggerDescriptor = polledTriggerContext.getTriggerDescriptor();
                 SchedulingPolicy schedulingPolicy = SchedulingPolicyFactory.createSchedulingPolicyOrThrowError(triggerDescriptor);
 
-                Date date = polledTriggerContext.getPreviousCallTime();
-                if (date != null) {
-                    long prevCallTime = date.getTime();
-                    if (prevCallTime >= myServerStartupTime) {
-                        long schedulingTime = schedulingPolicy.getScheduledTime(prevCallTime);
-                        if (schedulingTime > 0L && myTimeService.now() >= schedulingTime) {
-                            for (BranchEx branchEx : myBranchFilterHelper.getBranches(polledTriggerContext, null)) {
-                                createTrigger(branchEx).triggerBuild(polledTriggerContext);
+                for (BranchEx branchEx : myBranchFilterHelper.getBranches(polledTriggerContext, null)) {
+                    final String lastTimeKey = "lastTriggeredTime_" + branchEx.getName();
+                    final String lastTimeValue = polledTriggerContext.getCustomDataStorage().getValue(lastTimeKey);
+
+                    long now = myTimeService.now();
+                    final long lastTime;
+                    if (lastTimeValue != null) {
+                        try {
+                            lastTime = Long.parseLong(lastTimeValue);
+                        } catch (NumberFormatException e) {
+                            // fix value to prevent exception on next try
+                            polledTriggerContext.getCustomDataStorage().putValue(lastTimeKey, Long.toString(now));
+                            LOG.error(String.format("Invalid lastTimeValue <%s>", lastTimeValue));
+                            return;
+                        }
+                    } else {
+                        lastTime = 0;
+                    }
+                    if (lastTime < myServerStartupTime) {
+                        // start, unpause
+                        polledTriggerContext.getCustomDataStorage().putValue(lastTimeKey, Long.toString(now));
+                        return;
+                    }
+
+
+                    long schedulingTime = schedulingPolicy.getScheduledTime(lastTime);
+                    if (schedulingTime > 0L && now >= schedulingTime) {
+                        String waitTimeoutProp = polledTriggerContext.getTriggerDescriptor().getProperties().get(PROP_WAIT_TIMEOUT);
+                        long delta = 0; // milliseconds
+                        if (null != waitTimeoutProp) {
+                            long waitTimeoutValue = 0;
+                            try {
+                                waitTimeoutValue = Long.parseLong(waitTimeoutProp);
+                            } catch (NumberFormatException ignored){
                             }
+                            delta = TimeUnit.MINUTES.toMillis(waitTimeoutValue);
+                        }
+
+                        if (!isBuildInQueueOrRunning(polledTriggerContext) || now > schedulingTime + delta) {
+                            polledTriggerContext.getCustomDataStorage().putValue(lastTimeKey, Long.toString(now));
+                            createTrigger(branchEx).triggerBuild(polledTriggerContext);
                         }
                     }
                 }
+            }
+
+            private boolean isBuildInQueueOrRunning(@NotNull PolledTriggerContext polledTriggerContext) {
+                Map<String, String> properties = polledTriggerContext.getTriggerDescriptor().getProperties();
+
+                String buildIdProp = properties.get(PROP_BUILD_TYPE_ID_LIST);
+                String[] buildIdList = splitBuildIds(buildIdProp);
+                for (String buildId: buildIdList){
+                    if (buildId.isEmpty()) {
+                        continue;
+                    }
+                    SBuildType buildType = projectManager.findBuildTypeByExternalId(buildId);
+                    if (null == buildType) {
+                        continue;
+                    }
+                    if (!buildType.getQueuedBuilds(null).isEmpty() || !buildType.getRunningBuilds().isEmpty()) {
+                        return true;
+                    }
+                }
+                return false;
             }
 
             @NotNull
